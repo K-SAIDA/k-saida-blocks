@@ -57,6 +57,82 @@ goog.require('goog.math.Coordinate');
 goog.require('goog.userAgent');
 goog.require('goog.math.Rect');
 
+const d3 = require('d3');
+
+// 차트 출력 함수 정의
+const drawChart = (value, opt) => {
+
+  if (value.indexOf('{') == -1)
+    return;
+
+  try {
+
+    const json = JSON.parse(value);
+    const data = json.x.map((v, i) => { return { x: v, y: (json.y[i] == null) ? 0 : json.y[i] } })
+
+    document.getElementsByClassName('valueReportBox')[0].innerHTML = `<svg class='valueReportBoxchart' width='480' height='270'></svg>`;
+
+    const svg = d3.select('.valueReportBoxchart');
+    const margin = {
+      top: 20,
+      right: 20,
+      bottom: 30,
+      left: 50
+    }
+    
+    const options = {
+      margin: margin,
+      width: +svg.attr('width') - margin.left - margin.right,
+      height: +svg.attr('height') - margin.top - margin.bottom,
+      g: svg.append('g').attr('transform', `translate(${margin.left}, ${margin.top})`)
+    }
+    
+    const x = d3.scaleLinear().rangeRound([0, options.width]);
+    const y = d3.scaleLinear().rangeRound([options.height, 0]);
+    
+    const line = d3.line().x((d) => x(d.x)).y((d) => y(d.y))
+    
+    x.domain(d3.extent(data, (d) => d.x));
+    y.domain(d3.extent(data, (d) => d.y));
+     
+    options.g.append('g')
+      .attr('transform', `translate(0, ${options.height})`)
+      .call(d3.axisBottom(x))
+      .append('text')
+        .attr('fill', '#000')
+        .attr('x', options.width)
+        .attr('dy', '-0.71em')
+        .attr('text-anchor', 'end')
+        .attr('font-size', '12px')
+        .attr('font-weight', 'bold')
+        .text(opt.label.x);
+
+    options.g.append('g')
+      .call(d3.axisLeft(y))
+      .append('text')
+        .attr('fill', '#000')
+        .attr('transform', 'rotate(-90)')
+        .attr('y', 6)
+        .attr('dy', '0.71em')
+        .attr('text-anchor', 'end')
+        .attr('font-size', '12px')
+        .attr('font-weight', 'bold')
+        .text(opt.label.y);
+
+    options.g.append('path')
+      .datum(data)
+      .attr('fill', 'none')
+      .attr('stroke', '#FF794D')
+      .attr('stroke-linejoin', 'round')
+      .attr('stroke-linecap', 'round')
+      .attr('stroke-width', 2)
+      .attr('d', line)
+  }
+  catch (e) {
+    console.error(e);
+  }
+}
+
 /**
  * Class for a workspace.  This is an onscreen area with optional trashcan,
  * scrollbars, bubbles, and dragging.
@@ -977,6 +1053,7 @@ Blockly.WorkspaceSvg.prototype.glowStack = function(id, isGlowingStack) {
  * @param {?string} value String value to visually report.
  */
 Blockly.WorkspaceSvg.prototype.reportValue = function(id, value) {
+
   var block = this.getBlockById(id);
   if (!block) {
     throw 'Tried to report value on block that does not exist.';
@@ -993,6 +1070,84 @@ Blockly.WorkspaceSvg.prototype.reportValue = function(id, value) {
       Blockly.Colours.valueReportBorder
   );
   Blockly.DropDownDiv.showPositionedByBlock(this, block);
+
+  // 차트 그리기
+  drawChart(value, {
+    label: {
+      x: 'Epoch',
+      y: 'Loss'
+    }
+  });
+
+  // 값이 JSON 타입인 경우라면...
+  /*try {
+
+    const json = JSON.parse(value);
+    const data = json.x.map((v, i) => { return { x: v, y: (json.y[i] == null) ? 0 : json.y[i] } })
+
+    document.getElementsByClassName('valueReportBox')[0].innerHTML = `<svg class="valueReportBoxchart" width="480" height="320"></svg>`;
+
+    const svg = d3.select('.valueReportBoxchart');
+    const margin = {
+      top: 20,
+      right: 20,
+      bottom: 30,
+      left: 50
+    }
+    
+    const options = {
+      margin: margin,
+      width: +svg.attr('width') - margin.left - margin.right,
+      height: +svg.attr('height') - margin.top - margin.bottom,
+      g: svg.append('g').attr('transform', `translate(${margin.left}, ${margin.top})`)
+    }
+
+    console.log(json, data, svg, options);
+    
+    const x = d3.scaleLinear().rangeRound([0, options.width]);
+    const y = d3.scaleLinear().rangeRound([options.height, 0]);
+    
+    const line = d3.line().x((d) => x(d.x)).y((d) => y(d.y))
+    
+    x.domain(d3.extent(data, (d) => d.x));
+    y.domain(d3.extent(data, (d) => d.y));
+     
+    options.g.append("g")
+      .attr("transform", `translate(0, ${options.height})`)
+      .call(d3.axisBottom(x))
+      .append("text")
+        .attr("fill", "#000")
+        .attr("x", options.width)
+        .attr("dy", "-0.71em")
+        .attr("text-anchor", "end")
+        .attr("font-size", "12px")
+        .attr("font-weight", "bold")
+        .text("Epoch");
+
+    options.g.append("g")
+      .call(d3.axisLeft(y))
+      .append("text")
+        .attr("fill", "#000")
+        .attr("transform", "rotate(-90)")
+        .attr("y", 6)
+        .attr("dy", "0.71em")
+        .attr("text-anchor", "end")
+        .attr("font-size", "12px")
+        .attr("font-weight", "bold")
+        .text("Loss");
+
+    options.g.append("path")
+      .datum(data)
+      .attr("fill", "none")
+      .attr("stroke", "#FF794D")
+      .attr("stroke-linejoin", "round")
+      .attr("stroke-linecap", "round")
+      .attr("stroke-width", 2)
+      .attr("d", line)
+  }
+  catch (e) {
+    console.log(e);
+  }*/
 };
 
 /**

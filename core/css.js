@@ -250,7 +250,7 @@ Blockly.Css.CONTENT = [
   '}',
 
   '.blocklyDropDownContent {',
-    'max-height: 300px;', // @todo: spec for maximum height.
+    'max-height: 480px;', // @todo: spec for maximum height.
     'overflow: auto;',
   '}',
 
@@ -344,8 +344,8 @@ Blockly.Css.CONTENT = [
 
   '.valueReportBox {',
     'min-width: 50px;',
-    'max-width: 300px;',
-    'max-height: 200px;',
+    'max-width: 480px;',
+    'max-height: 320px;',
     'overflow: auto;',
     'word-wrap: break-word;',
     'text-align: center;',
