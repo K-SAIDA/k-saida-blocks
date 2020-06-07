@@ -60,7 +60,7 @@ goog.require('goog.math.Rect');
 const d3 = require('d3');
 
 // 차트 출력 함수 정의
-const drawChart = (value, opt) => {
+const drawHistory = (value) => {
 
   if (value.indexOf('{') == -1)
     return;
@@ -68,69 +68,145 @@ const drawChart = (value, opt) => {
   try {
 
     const json = JSON.parse(value);
-    const data = json.x.map((v, i) => { return { x: v, y: (json.y[i] == null) ? 0 : json.y[i] } })
+
+    // 코드 점검
+    if (json.code != 'dl_fnn_train')
+      return;
+
+    //const data = json.x.map((v, i) => { return { x: v, y: (json.y[i] == null) ? Infinity : json.y[i], z: (json.z[i] == null) ? 0 : json.z[i] } })
+    const data = json.data.map(v => {
+      return {
+        name: v.name,
+        values: v.values.x.map((w, i) => { return { x: w, y: v.values.y[i] } })
+      }
+    });
 
     document.getElementsByClassName('valueReportBox')[0].innerHTML = `<svg class='valueReportBoxchart' width='480' height='270'></svg>`;
-
     const svg = d3.select('.valueReportBoxchart');
     const margin = {
       top: 20,
-      right: 20,
+      right: 50,
       bottom: 30,
       left: 50
     }
-    
+      
     const options = {
       margin: margin,
       width: +svg.attr('width') - margin.left - margin.right,
       height: +svg.attr('height') - margin.top - margin.bottom,
       g: svg.append('g').attr('transform', `translate(${margin.left}, ${margin.top})`)
     }
-    
+      
     const x = d3.scaleLinear().rangeRound([0, options.width]);
     const y = d3.scaleLinear().rangeRound([options.height, 0]);
-    
-    const line = d3.line().x((d) => x(d.x)).y((d) => y(d.y))
-    
-    x.domain(d3.extent(data, (d) => d.x));
-    y.domain(d3.extent(data, (d) => d.y));
-     
-    options.g.append('g')
-      .attr('transform', `translate(0, ${options.height})`)
+    const z = d3.scaleLinear().rangeRound([options.height, 0]);
+      
+    const line = d3.line().curve(d3.curveMonotoneX).x((d) => x(d.x)).y((d) => y(d.y));
+    const line2 = d3.line().curve(d3.curveMonotoneX).x((d) => x(d.x)).y((d) => z(d.y));
+      
+    const myColor = d3.scaleOrdinal()
+          .domain(data.map(v => v.name))
+          .range(d3.schemeSet2);
+      
+    x.domain([d3.min(d3.extent(data, (d) => d.values.map(v => v.x))[0]), d3.max(d3.extent(data, (d) => d.values.map(v => v.x))[0])]);
+    y.domain([d3.min(d3.extent(data, (d) => d.values.map(v => v.y))[1]), d3.max(d3.extent(data, (d) => d.values.map(v => v.y))[1])]);
+    z.domain([d3.min(d3.extent(data, (d) => d.values.map(v => v.y))[0]), d3.max(d3.extent(data, (d) => d.values.map(v => v.y))[0])]);
+       
+    options.g.append("g")
+      .attr('class', 'axisBottom')
+      .attr("transform", "translate(0," + options.height + ")")
       .call(d3.axisBottom(x))
-      .append('text')
-        .attr('fill', '#000')
-        .attr('x', options.width)
-        .attr('dy', '-0.71em')
-        .attr('text-anchor', 'end')
-        .attr('font-size', '12px')
-        .attr('font-weight', 'bold')
-        .text(opt.label.x);
-
-    options.g.append('g')
+      
+    options.g.append("g")
+      .attr('class', 'axisLeft')
       .call(d3.axisLeft(y))
-      .append('text')
-        .attr('fill', '#000')
-        .attr('transform', 'rotate(-90)')
-        .attr('y', 6)
-        .attr('dy', '0.71em')
-        .attr('text-anchor', 'end')
-        .attr('font-size', '12px')
-        .attr('font-weight', 'bold')
-        .text(opt.label.y);
-
-    options.g.append('path')
-      .datum(data)
-      .attr('fill', 'none')
-      .attr('stroke', '#FF794D')
-      .attr('stroke-linejoin', 'round')
-      .attr('stroke-linecap', 'round')
-      .attr('stroke-width', 2)
-      .attr('d', line)
+      
+    options.g.append("g")
+      .attr('class', 'axisRight')
+      .attr("transform", `translate(${options.width}, 0)`)
+      .call(d3.axisRight(z))
+      
+    options.g.append("path")
+      .data([data])
+      .attr("fill", "none")
+      .attr("stroke", (d) => myColor(d[0].name))
+      .attr("stroke-linejoin", "round")
+      .attr("stroke-linecap", "round")
+      .attr("stroke-width", 2)
+      .attr("d", (d) => line(d[0].values))
+      
+    options.g.append("path")
+      .data([data])
+      .attr('class', 'path')
+      .attr("fill", "none")
+      .attr("stroke", (d) => myColor(d[1].name))
+      .attr("stroke-linejoin", "round")
+      .attr("stroke-linecap", "round")
+      .attr("stroke-width", 2)
+      .attr("d", (d) => line2(d[1].values))
+      
+    data.map((v, i) => {
+      
+      svg.selectAll(`.axis${(i == 0) ? 'Left' : 'Right'} line`)
+        .style('stroke', myColor(v.name))
+      
+      svg.selectAll(`.axis${(i == 0) ? 'Left' : 'Right'} path`)
+        .style('stroke', myColor(v.name))
+      
+      svg.selectAll(`.axis${(i == 0) ? 'Left' : 'Right'} text`)
+        .style('fill', myColor(v.name))
+      
+      svg.selectAll(`dot_${i}`)
+        .data([v])
+        .enter()
+          .append('g')
+          .style('fill', (d) => myColor(d.name))
+        .selectAll(`point_${i}`)
+        .data((d) => d.values)
+        .enter()
+        .append("circle")
+          .attr("cx", (d) => x(d.x) + options.margin.left)
+          .attr("cy", (d) => ((i == 0) ? y(d.y) : z(d.y)) + options.margin.top)
+          .attr("r", 4)
+          .attr("stroke", "white")
+        
+      options.g.append("circle")
+        .attr("cx", options.width - 75)
+        .attr("cy", (i == 0) ? options.margin.top : options.margin.top * 2 * i)
+        .attr("r", 4)
+        .style("fill", myColor(v.name))
+      
+      options.g.append("text")
+        .attr("x", options.width - 50)
+        .attr("y", (i == 0) ? options.margin.top : options.margin.top * 2 * i)
+        .text(v.name)
+        .style("font-size", "12px")
+        .attr("alignment-baseline","middle")
+    });
   }
   catch (e) {
     console.error(e);
   }
+}
+
+// Ml_K_Means 결과 출력
+const showReport = (value) => {
+  if (value.indexOf('{') == -1)
+  return;
+
+  const json = JSON.parse(value);
+
+  // 코드 점검
+  if (json.code != 'ml_k_means')
+    return;
+
+  // 추가
+  document.getElementsByClassName('valueReportBox')[0].innerHTML = String(json.data);
+
+  const deltaX = Number(document.getElementsByClassName('arrowTop')[0].style.transform.split('(')[1].split('px,')[0]) / 3;
+
+  document.getElementsByClassName('arrowTop')[0].style.transform = `translate(${deltaX}px, -9px) rotate(45deg)`;
+  document.getElementsByClassName('blocklyDropDownDiv')[0].style.left = Number(document.getElementsByClassName('blocklyDropDownDiv')[0].style.left.split('px')[0]) + deltaX * 2 + 'px';
 }
 
 /**
@@ -1071,83 +1147,11 @@ Blockly.WorkspaceSvg.prototype.reportValue = function(id, value) {
   );
   Blockly.DropDownDiv.showPositionedByBlock(this, block);
 
+  // 결과 출력
+  showReport(value);
+
   // 차트 그리기
-  drawChart(value, {
-    label: {
-      x: 'Epoch',
-      y: 'Loss'
-    }
-  });
-
-  // 값이 JSON 타입인 경우라면...
-  /*try {
-
-    const json = JSON.parse(value);
-    const data = json.x.map((v, i) => { return { x: v, y: (json.y[i] == null) ? 0 : json.y[i] } })
-
-    document.getElementsByClassName('valueReportBox')[0].innerHTML = `<svg class="valueReportBoxchart" width="480" height="320"></svg>`;
-
-    const svg = d3.select('.valueReportBoxchart');
-    const margin = {
-      top: 20,
-      right: 20,
-      bottom: 30,
-      left: 50
-    }
-    
-    const options = {
-      margin: margin,
-      width: +svg.attr('width') - margin.left - margin.right,
-      height: +svg.attr('height') - margin.top - margin.bottom,
-      g: svg.append('g').attr('transform', `translate(${margin.left}, ${margin.top})`)
-    }
-
-    console.log(json, data, svg, options);
-    
-    const x = d3.scaleLinear().rangeRound([0, options.width]);
-    const y = d3.scaleLinear().rangeRound([options.height, 0]);
-    
-    const line = d3.line().x((d) => x(d.x)).y((d) => y(d.y))
-    
-    x.domain(d3.extent(data, (d) => d.x));
-    y.domain(d3.extent(data, (d) => d.y));
-     
-    options.g.append("g")
-      .attr("transform", `translate(0, ${options.height})`)
-      .call(d3.axisBottom(x))
-      .append("text")
-        .attr("fill", "#000")
-        .attr("x", options.width)
-        .attr("dy", "-0.71em")
-        .attr("text-anchor", "end")
-        .attr("font-size", "12px")
-        .attr("font-weight", "bold")
-        .text("Epoch");
-
-    options.g.append("g")
-      .call(d3.axisLeft(y))
-      .append("text")
-        .attr("fill", "#000")
-        .attr("transform", "rotate(-90)")
-        .attr("y", 6)
-        .attr("dy", "0.71em")
-        .attr("text-anchor", "end")
-        .attr("font-size", "12px")
-        .attr("font-weight", "bold")
-        .text("Loss");
-
-    options.g.append("path")
-      .datum(data)
-      .attr("fill", "none")
-      .attr("stroke", "#FF794D")
-      .attr("stroke-linejoin", "round")
-      .attr("stroke-linecap", "round")
-      .attr("stroke-width", 2)
-      .attr("d", line)
-  }
-  catch (e) {
-    console.log(e);
-  }*/
+  drawHistory(value);
 };
 
 /**
